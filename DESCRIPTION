@@ -1,0 +1,17 @@
+Package: ubc
+Type: Package
+Title: Unified Bias Control
+Version: 0.0.1
+Authors@R: c(person("Marcello", "Gallucci",email = "mcfanda@gmail.com",role = c("aut", "cre")),
+             person("Marco", "Perugini",email = "tobeadded@unimib.it",role = c("aut")),
+             person("Giulio", "Costantini",email = "tobeadded@unimib.it",role = c("aut")),
+             person("Daniele", "Romano",email = "tobeadded@unimib.it",role = c("aut"))
+  )
+Description: This is super cool Unified bias control package.
+             It will do a lot, but not just yet.
+Requires: ggplot2, stats
+License: GPL
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
