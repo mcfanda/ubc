@@ -176,7 +176,6 @@ ubc_lm <- function(formula, candidates, stage2, varnames = NULL, index = 2, meth
   names(confirmation)[1] <- "var"
 
   cand <- candidates
-  print(names(cand))
   names(cand)[2:5]<-paste0("dis.",names(cand)[2:5])
   cand_role <- cand$role
   cand$role <- NULL
