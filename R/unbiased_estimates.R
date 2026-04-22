@@ -17,7 +17,6 @@ lm_candidates <- function(formula, data, varnames = NULL, index = 2,
                            sig.level = .10, prop.loser = .33) {
 
   ests <- ubc_lm_estimates(formula, data, varnames = varnames, index = index)
-
   if (is.null(ests) || nrow(ests) == 0) {
     warning("No sensible variables found for candidate selection")
     out <- .empty_lm_candidates()
@@ -143,9 +142,10 @@ ubc_lm_estimates <- function(formula, data, varnames = NULL, index = 2) {
 #' @param method `"WLS"` (default) weights the estimation with 1/SE^2, where SE is the Stage 2 estimates standard errors.
 #'                 `"OLS"` does not apply any weights.
 #' @param loo apply the leave-one-out algorithm to estimate the unbiased coefficients
+#' @param standardize Whether to standardize the variables before estimation. Default `TRUE`
 #' @return A data.frame with the unbiased estimates, SE, t-test and p-values of the selected variables
 #' @export
-ubc_lm <- function(formula, candidates, stage2, varnames = NULL, index = 2, method = "WLS", loo=TRUE) {
+ubc_lm <- function(formula, candidates, stage2, varnames = NULL, index = 2, method = "WLS", loo=TRUE, use.losers=TRUE, standardize=TRUE) {
 
   if (!"ubcResults" %in% class(candidates))
     stop("Please provide discovery phase results of class ubcResults")
@@ -158,14 +158,20 @@ ubc_lm <- function(formula, candidates, stage2, varnames = NULL, index = 2, meth
   if (is.null(varnames))
     varnames <- candidates$var
 
-  stage2 <- .standardize_df(stage2)
+  if (!use.losers) {
+    candidates<-candidates[candidates$role=="W",]
+    varnames<-candidates$var
+  }
+
+  if (standardize)
+    stage2 <- .standardize_df(stage2)
+
   confirmation <- ubc_lm_estimates(formula, stage2, varnames = varnames, index = index)
 
   if (is.null(confirmation) || nrow(confirmation) == 0) {
     warning("No sensible stage-2 estimates could be computed")
     return(NULL)
   }
-
   names(confirmation) <- paste0("c_", names(confirmation))
   names(confirmation)[1] <- "var"
 
@@ -173,42 +179,161 @@ ubc_lm <- function(formula, candidates, stage2, varnames = NULL, index = 2, meth
   cand_role <- cand$role
   cand$role <- NULL
 
-  data <- merge(confirmation, cand, by = "var", all.x = TRUE, sort = FALSE)
 
+  data <- merge(confirmation, cand, by = "var", all.x = TRUE, sort = FALSE)
   if (nrow(data) < 3) {
     warning("Too few candidates to estimate unbiased estimates")
-    return(NULL)
+    loo<-FALSE
   }
-
   idx <- match(data$var, candidates$var)
   data$role <- candidates$role[idx]
-
   .cleanClass(data) <- "ubcBiasDetection"
-  data$adj.est <- .loo_beta_estimates(data, method = method,loo=loo)
+  adj<-.loo_beta_estimates(data, method = method,loo=loo)
+  data$adj.est <- adj$adj.est
+  data$adj.se <- adj$adj.se
+  data$adj.t <- adj$adj.t
+  data$adj.p <- adj$adj.p
+  data$adj.var <- adj$adj.var
+  data$adj.var.calibration <- adj$var.calibration
+  data$adj.var.stage1 <- adj$var.stage1
   attr(data, "method") <- method
   attr(data, "loo") <- loo
-
   data
 }
 
 
 ### unexported functions
 
-.loo_beta_estimates <- function(data, method,loo=TRUE) {
+.loo_beta_estimates <- function(data, method, loo = TRUE, vcov_type = "HC3") {
 
   if (!"ubcBiasDetection" %in% class(data))
     stop("UBC method requires data of class `ubcBiasDetection`")
 
   if (nrow(data) < 3) {
-    warning("Too few rows for unbiased estimation")
+    warning("Too few coefficients to estimate unbiased results")
+    return(data.frame(
+      adj.est = rep(NA_real_, nrow(data)),
+      adj.se = rep(NA_real_, nrow(data)),
+      adj.var = rep(NA_real_, nrow(data)),
+      var.calibration = rep(NA_real_, nrow(data)),
+      var.stage1 = rep(NA_real_, nrow(data))
+    ))
+  }
+
+  if (!requireNamespace("sandwich", quietly = TRUE))
+    stop("Package 'sandwich' is required")
+
+  if (loo && nrow(data) < 10) {
+    loo <- FALSE
+  }
+
+  myweights <- 1 / (data$c_SE^2)
+
+  compute_one <- function(mod, newrow, se1, vcov_type) {
+
+    cf <- stats::coef(mod)
+    a_hat <- unname(cf[1])
+    b_hat <- unname(cf[2])
+
+    x0 <- newrow$estimate[1]
+
+    # corrected estimate
+    adj_est <- a_hat + b_hat * x0
+
+    # robust covariance of regression coefficients
+    V <- sandwich::vcovHC(mod, type = vcov_type)
+    V2 <- V[1:2, 1:2, drop = FALSE]
+
+    # calibration component: [1, x0] V [1, x0]'
+    g <- c(1, x0)
+    var_cal <- as.numeric(t(g) %*% V2 %*% g)
+
+    # propagated Stage-1 variance
+    var_stage1 <- (b_hat^2) * (se1^2)
+
+    var_adj <- var_cal + var_stage1
+    adj_se <- sqrt(var_adj)
+
+    c(
+      adj.est = adj_est,
+      adj.se = adj_se,
+      adj.var = var_adj,
+      var.calibration = var_cal,
+      var.stage1 = var_stage1
+    )
+  }
+
+  if (loo) {
+
+    out <- lapply(seq_len(nrow(data)), function(i) {
+
+      .data <- data[-i, , drop = FALSE]
+
+      .weights <- NULL
+      if (toupper(method) == "WLS")
+        .weights <- myweights[-i]
+
+      mod <- stats::lm(
+        c_estimate ~ estimate,
+        data = .data,
+        weights = .weights
+      )
+
+      compute_one(
+        mod = mod,
+        newrow = data[i, , drop = FALSE],
+        se1 = data$SE[i],
+        vcov_type = vcov_type
+      )
+    })
+
+    out <- do.call(rbind, out)
+
+  } else {
+
+    .weights <- NULL
+    if (toupper(method) == "WLS")
+      .weights <- myweights
+
+    mod <- stats::lm(
+      c_estimate ~ estimate,
+      data = data,
+      weights = .weights
+    )
+
+    out <- lapply(seq_len(nrow(data)), function(i) {
+      compute_one(
+        mod = mod,
+        newrow = data[i, , drop = FALSE],
+        se1 = data$SE[i],
+        vcov_type = vcov_type
+      )
+    })
+
+    out <- do.call(rbind, out)
+  }
+
+  out <- as.data.frame(out)
+  rownames(out) <- NULL
+
+  out$adj.t <- out$adj.est / out$adj.se
+  out$adj.p <- 2 * stats::pnorm(-abs(out$adj.t))
+
+  out
+}
+
+.old.loo_beta_estimates <- function(data, method,loo=TRUE) {
+
+  if (!"ubcBiasDetection" %in% class(data))
+    stop("UBC method requires data of class `ubcBiasDetection`")
+  if (nrow(data) < 3) {
+    warning("Too few coefficients to estimate unbiased results")
     return(rep(NA_real_, nrow(data)))
   }
 
-  if (loo && nrow(data) < 5) {
-    warning("Too few rows for leave-one-out estimation")
-    return(rep(NA_real_, nrow(data)))
+  if (loo && nrow(data) < 10) {
+    loo <- FALSE
   }
-
   myweights <- 1 / (data$c_SE^2)
 
   if (loo) {
@@ -219,25 +344,14 @@ ubc_lm <- function(formula, candidates, stage2, varnames = NULL, index = 2, meth
     .weights <- NULL
     if (toupper(method) == "WLS")
       .weights <- myweights[-i]
-
-    out <- tryCatch({
       mod <- stats::lm(c_estimate ~ estimate, data = .data, weights = .weights)
       stats::predict(mod, newdata = data[i, , drop = FALSE])[1]
-    }, error = function(e) {
-      NA_real_
-    }, warning = function(w) {
-      invokeRestart("muffleWarning")
-    })
-
-    as.numeric(out)
   })
-
   results<-unlist(coefs)
   } else {
     .weights <- NULL
     if (toupper(method) == "WLS")
       .weights <- myweights
-
     mod <- stats::lm(c_estimate ~ estimate, data = data, weights = .weights)
     coefs<-stats::predict(mod)
     results<-unlist(coefs)

@@ -11,7 +11,9 @@ ubc_lm(
   varnames = NULL,
   index = 2,
   method = "WLS",
-  loo = TRUE
+  loo = TRUE,
+  use.losers = TRUE,
+  standardize = TRUE
 )
 }
 \arguments{
@@ -28,6 +30,8 @@ by each input variable. A GLM is estimated for each \code{varnames} variable by 
 \code{"OLS"} does not apply any weights.}
 
 \item{loo}{apply the leave-one-out algorithm to estimate the unbiased coefficients}
+
+\item{standardize}{Whether to standardize the variables before estimation. Default \code{TRUE}}
 }
 \value{
 A data.frame with the unbiased estimates, SE, t-test and p-values of the selected variables
