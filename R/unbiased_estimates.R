@@ -295,8 +295,9 @@ ubc_lm <- function(formula, candidates, stage2, varnames = NULL, index = 2, meth
       as.numeric(t(g) %*% V2 %*% g),
       error = function(e) NA_real_
     )
-
-    var_stage1 <- (b_hat^2) * (se1^2)
+#   var_stage1 = 0 is calibrated expected confirmation estimate given the observed discovery estimate
+#    var_stage1 <- (b_hat^2) * (se1^2)
+     var_stage1 <- 0
 
     if (!is.finite(var_cal) || !is.finite(var_stage1)) {
       return(c(
