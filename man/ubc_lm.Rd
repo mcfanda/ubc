@@ -2,7 +2,7 @@
 % Please edit documentation in R/unbiased_estimates.R
 \name{ubc_lm}
 \alias{ubc_lm}
-\title{Estimate unbiased coefficients of a GLM}
+\title{Estimate bias corrected coefficients of a GLM}
 \usage{
 ubc_lm(
   formula,
@@ -37,6 +37,6 @@ by each input variable. A GLM is estimated for each \code{varnames} variable by 
 A data.frame with the unbiased estimates, SE, t-test and p-values of the selected variables
 }
 \description{
-This function estimates unbiased coefficients of a general model based on the UCB method.
+This function estimates bias corrected coefficients of a general model based on the UBC method.
 Coefficients are computed considering both the discovery data and the stage 2 data.
 }

@@ -14,9 +14,11 @@
 #' @return A table with the estimates, SE, t-test and p-values of the selected variables
 #' @export
 lm_candidates <- function(formula, data, varnames = NULL, index = 2,
-                           sig.level = .10, prop.loser = .33) {
+                           sig.level = .10, prop.loser = .33, standardize=TRUE) {
 
-  ests <- ubc_lm_estimates(formula, data, varnames = varnames, index = index)
+
+  ests <- ubc_lm_estimates(formula, data, varnames = varnames, index = index, standardize = standardize)
+
   if (is.null(ests) || nrow(ests) == 0) {
     warning("No sensible variables found for candidate selection")
     out <- .empty_lm_candidates()
@@ -78,7 +80,7 @@ lm_candidates <- function(formula, data, varnames = NULL, index = 2,
 #' @param index the index of the coefficient in the model results to analyze. Default is 2, indicating the first effect in a GLM (1 would be the intercept)
 #' @return A data.frame with the unbiased estimates, SE, t-test and p-values of the selected variables
 #' @export
-ubc_lm_estimates <- function(formula, data, varnames = NULL, index = 2) {
+ubc_lm_estimates <- function(formula, data, varnames = NULL, index = 2, standardize=TRUE) {
 
   if (!inherits(formula, "formula"))
     stop("Please provide a model formula of class `formula`")
@@ -101,6 +103,9 @@ ubc_lm_estimates <- function(formula, data, varnames = NULL, index = 2) {
     warning("No candidate variables available in `data`")
     return(.empty_lm_estimates())
   }
+
+  if (standardize)
+    data <- .standardize_df(data)
 
   forms <- .make_formulas(formula, varnames)
 
@@ -129,9 +134,9 @@ ubc_lm_estimates <- function(formula, data, varnames = NULL, index = 2) {
 }
 
 
-#' Estimate unbiased coefficients of a GLM
+#' Estimate bias corrected coefficients of a GLM
 #'
-#' This function estimates unbiased coefficients of a general model based on the UCB method.
+#' This function estimates bias corrected coefficients of a general model based on the UBC method.
 #' Coefficients are computed considering both the discovery data and the stage 2 data.
 #'
 #' @param formula A formula of the form y~. or y~x+. in which the dot `.` is replaced

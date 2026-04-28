@@ -4,7 +4,7 @@
 \alias{ubc_lm_estimates}
 \title{Estimate coefficients of a GLM}
 \usage{
-ubc_lm_estimates(formula, data, varnames = NULL, index = 2)
+ubc_lm_estimates(formula, data, varnames = NULL, index = 2, standardize = TRUE)
 }
 \arguments{
 \item{formula}{A formula of the form y~. or y~x+. in which the dot \code{.} is replaced

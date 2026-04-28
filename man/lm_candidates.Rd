@@ -10,7 +10,8 @@ lm_candidates(
   varnames = NULL,
   index = 2,
   sig.level = 0.1,
-  prop.loser = 0.33
+  prop.loser = 0.33,
+  standardize = TRUE
 )
 }
 \arguments{

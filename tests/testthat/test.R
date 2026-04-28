@@ -33,4 +33,6 @@ data<-simulate_correlated_y(100,r)
 disc<-ubc::lm_candidates(y~.,data)
 r2<-r[disc$var]
 data2<-simulate_correlated_y(100,r2)
-ubc::ubc_lm(y~.,disc,data2)
+res<-ubc::ubc_lm(y~.,disc,data2)
+res
+summary(res)
