@@ -236,6 +236,226 @@ ubc_lm <- function(formula, candidates, stage2, varnames = NULL, index = 2, meth
 
   myweights <- 1 / (data$con.SE^2)
 
+  ## plug-in estimate of between-variable variance of latent Stage-1 effects
+  tau2_hat <- max(
+    stats::var(data$dis.estimate, na.rm = TRUE) -
+      mean(data$dis.SE^2, na.rm = TRUE),
+    0
+  )
+
+  compute_one <- function(mod, newrow, se1, tau2, vcov_type) {
+
+    na_out <- c(
+      adj.est = NA_real_,
+      adj.se = NA_real_,
+      adj.var = NA_real_,
+      var.calibration = NA_real_,
+      var.stage1 = NA_real_
+    )
+
+    cf <- tryCatch(stats::coef(mod), error = function(e) NULL)
+    if (is.null(cf) || length(cf) < 2L)
+      return(na_out)
+
+    if (!all(c("(Intercept)", "dis.estimate") %in% names(cf)))
+      return(na_out)
+
+    a_hat <- unname(cf["(Intercept)"])
+    b_hat <- unname(cf["dis.estimate"])
+    x0 <- newrow$dis.estimate[1]
+
+    if (!is.finite(a_hat) || !is.finite(b_hat) || !is.finite(x0) || !is.finite(se1))
+      return(na_out)
+
+    adj_est <- a_hat + b_hat * x0
+
+    V <- tryCatch(
+      sandwich::vcovHC(mod, type = vcov_type),
+      error = function(e) NULL
+    )
+
+    if (is.null(V) || is.null(rownames(V)) || is.null(colnames(V))) {
+      return(c(
+        adj.est = adj_est,
+        adj.se = NA_real_,
+        adj.var = NA_real_,
+        var.calibration = NA_real_,
+        var.stage1 = NA_real_
+      ))
+    }
+
+    needed <- c("(Intercept)", "dis.estimate")
+    if (!all(needed %in% rownames(V)) || !all(needed %in% colnames(V))) {
+      return(c(
+        adj.est = adj_est,
+        adj.se = NA_real_,
+        adj.var = NA_real_,
+        var.calibration = NA_real_,
+        var.stage1 = NA_real_
+      ))
+    }
+
+    V2 <- V[needed, needed, drop = FALSE]
+    g <- c("(Intercept)" = 1, "dis.estimate" = x0)
+
+    var_cal <- tryCatch(
+      as.numeric(t(g) %*% V2 %*% g),
+      error = function(e) NA_real_
+    )
+
+    ## posterior variance of latent Stage-1 effect given observed dis.estimate
+    if (!is.finite(tau2) || tau2 < 0) {
+      stage1_post_var <- NA_real_
+    } else if (tau2 == 0) {
+      stage1_post_var <- 0
+    } else {
+      stage1_post_var <- (tau2 * se1^2) / (tau2 + se1^2)
+    }
+
+    var_stage1 <- (b_hat^2) * stage1_post_var
+
+    if (!is.finite(var_cal) || !is.finite(var_stage1)) {
+      return(c(
+        adj.est = adj_est,
+        adj.se = NA_real_,
+        adj.var = NA_real_,
+        var.calibration = var_cal,
+        var.stage1 = var_stage1
+      ))
+    }
+
+    var_adj <- var_cal + var_stage1
+
+    if (!is.finite(var_adj) || var_adj < 0) {
+      if (isTRUE(all.equal(var_adj, 0, tolerance = 1e-12))) {
+        var_adj <- 0
+      } else {
+        return(c(
+          adj.est = adj_est,
+          adj.se = NA_real_,
+          adj.var = var_adj,
+          var.calibration = var_cal,
+          var.stage1 = var_stage1
+        ))
+      }
+    }
+
+    adj_se <- sqrt(var_adj)
+
+    c(
+      adj.est = adj_est,
+      adj.se = adj_se,
+      adj.var = var_adj,
+      var.calibration = var_cal,
+      var.stage1 = var_stage1
+    )
+  }
+
+  if (loo) {
+
+    out <- lapply(seq_len(nrow(data)), function(i) {
+
+      .data <- data[-i, , drop = FALSE]
+
+      .weights <- NULL
+      if (toupper(method) == "WLS")
+        .weights <- myweights[-i]
+
+      mod <- tryCatch(
+        stats::lm(con.estimate ~ dis.estimate, data = .data, weights = .weights),
+        error = function(e) NULL
+      )
+
+      if (is.null(mod)) {
+        return(c(
+          adj.est = NA_real_,
+          adj.se = NA_real_,
+          adj.var = NA_real_,
+          var.calibration = NA_real_,
+          var.stage1 = NA_real_
+        ))
+      }
+
+      compute_one(
+        mod = mod,
+        newrow = data[i, , drop = FALSE],
+        se1 = data$dis.SE[i],
+        tau2 = tau2_hat,
+        vcov_type = vcov_type
+      )
+    })
+
+  } else {
+
+    .weights <- NULL
+    if (toupper(method) == "WLS")
+      .weights <- myweights
+
+    mod <- tryCatch(
+      stats::lm(con.estimate ~ dis.estimate, data = data, weights = .weights),
+      error = function(e) NULL
+    )
+
+    if (is.null(mod)) {
+      out <- replicate(
+        nrow(data),
+        c(
+          adj.est = NA_real_,
+          adj.se = NA_real_,
+          adj.var = NA_real_,
+          var.calibration = NA_real_,
+          var.stage1 = NA_real_
+        ),
+        simplify = FALSE
+      )
+    } else {
+      out <- lapply(seq_len(nrow(data)), function(i) {
+        compute_one(
+          mod = mod,
+          newrow = data[i, , drop = FALSE],
+          se1 = data$dis.SE[i],
+          tau2 = tau2_hat,
+          vcov_type = vcov_type
+        )
+      })
+    }
+  }
+
+  out <- as.data.frame(do.call(rbind, out))
+  rownames(out) <- NULL
+
+  out$adj.t <- out$adj.est / out$adj.se
+  out$adj.p <- 2 * stats::pnorm(-abs(out$adj.t))
+
+  out
+}
+
+x.loo_beta_estimates <- function(data, method, loo = TRUE, vcov_type = "HC3") {
+
+  if (!"ubcBiasDetection" %in% class(data))
+    stop("UBC method requires data of class `ubcBiasDetection`")
+
+  if (nrow(data) < 3) {
+    warning("Too few coefficients to estimate unbiased results")
+    return(data.frame(
+      adj.est = rep(NA_real_, nrow(data)),
+      adj.se = rep(NA_real_, nrow(data)),
+      adj.var = rep(NA_real_, nrow(data)),
+      var.calibration = rep(NA_real_, nrow(data)),
+      var.stage1 = rep(NA_real_, nrow(data)),
+      adj.t = rep(NA_real_, nrow(data)),
+      adj.p = rep(NA_real_, nrow(data))
+    ))
+  }
+
+  if (!requireNamespace("sandwich", quietly = TRUE))
+    stop("Package 'sandwich' is required")
+
+  if (loo && nrow(data) < 10)
+    loo <- FALSE
+
+  myweights <- 1 / (data$con.SE^2)
+
   compute_one <- function(mod, newrow, se1, vcov_type) {
 
     na_out <- c(
