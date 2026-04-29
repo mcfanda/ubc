@@ -9,7 +9,7 @@ Authors@R: c(person("Marcello", "Gallucci",email = "mcfanda@gmail.com",role = c(
   )
 Description: This is super cool Unified bias control package.
              It will do a lot, but not just yet.
-Requires: ggplot2, stats
+Imports: ggplot2, stats, sandwich
 License: GPL
 Encoding: UTF-8
 LazyData: true

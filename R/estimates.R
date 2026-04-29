@@ -32,7 +32,7 @@
     stage1_post_var <- (tau2 * dis_se^2) / (tau2 + dis_se^2)
   }
 
-  var_posterior <- var_calibration + (b_hat^2) * stage1_post_var +sigma2
+  var_posterior <- var_calibration + (b_hat^2) * stage1_post_var
 
   data.frame(
     adj.est = adj_est,

@@ -9,7 +9,7 @@ summary.ubcBiasDetection<-function(x,...) {
 
   mod<-lm(con.estimate~dis.estimate,x)
   r2<-summary(mod)$r.squared
-  print(x[,c("var","adj.estimate","adj.se","adj.t","adj.p")])
+  print(x[,c("var","adj.est","adj.se","adj.t","adj.p")])
   cat("\nTarget (winners) variables:\n\n")
   x$infl  <-  x$dis.estimate   -  x$con.estimate
   x$bias1 <-  x$dis.estimate   -  x$adj.est
