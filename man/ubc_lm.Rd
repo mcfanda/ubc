@@ -13,7 +13,8 @@ ubc_lm(
   method = "WLS",
   loo = TRUE,
   use.losers = TRUE,
-  standardize = TRUE
+  standardize = TRUE,
+  se_method = c("posterior", "calibration", "full", "none")
 )
 }
 \arguments{
