@@ -24,7 +24,7 @@
       mean(data_for_tau2$dis.SE^2, na.rm = TRUE),
     0
   )
-  sigma2 <- summary(mod)$sigma^2
+
 
   if (tau2 <= 0) {
     stage1_post_var <- 0
@@ -49,9 +49,9 @@
 
 
 .loo_beta_estimates <- function(data, method, loo = TRUE, vcov_type = "HC3",
-                                se_method = c("posterior",
+                                se_method = c("full",
+                                              "posterior",
                                               "calibration",
-                                              "full",
                                               "none")) {
 
   se_method <- match.arg(se_method)

@@ -27,12 +27,23 @@ simulate_correlated_y <- function(n, r, seed = NULL, offset=0) {
   return(out)
 }
 
-r<-c(rep(.4,20),rep(0,25))
+r<-c(rep(.2,20),rep(0,25))
 names(r)<-paste0("x",1:45)
 data<-simulate_correlated_y(100,r)
 disc<-ubc::lm_candidates(y~.,data)
 r2<-r[disc$var]
 data2<-simulate_correlated_y(100,r2)
-res<-ubc::ubc_lm(y~.,disc,data2)
+res<-ubc::ubc_lm(y~.,disc,data2,se_method="full")
 res
 summary(res)
+
+data<-simulate_correlated_y(200,r2)
+cor(data$y,data$x1)
+data1<-data[1:100,]
+cor(data1$y,data1$x1)
+data2<-data[101:200,]
+cor(data2$y,data2$x1)
+data3<-simulate_correlated_y(100,r2)
+cor(data3$y,data3$x1)
+data4<-simulate_correlated_y(100,r2)
+cor(data4$y,data4$x1)
