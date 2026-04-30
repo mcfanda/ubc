@@ -9,6 +9,8 @@ summary.ubcBiasDetection<-function(x,...) {
 
   mod<-lm(con.estimate~dis.estimate,x)
   r2<-summary(mod)$r.squared
+  a<-coef(mod)[1]
+  b<-coef(mod)[2]
   print(x[,c("var","adj.est","adj.se","adj.t","adj.p")])
   cat("\nTarget (winners) variables:\n\n")
   x$infl  <-  x$dis.estimate   -  x$con.estimate
@@ -27,6 +29,8 @@ summary.ubcBiasDetection<-function(x,...) {
   cat("Target variables Stage 1 bias SD: ", sd(df1$bias1),"\n")
   cat("Target variables Stage 2 bias SD: ", sd(df1$bias2),"\n")
   cat("Stages coherence: ", r2,"\n")
+  cat("Stages coef (b): ", b,"\n")
+  cat("Stages offest (a): ", a,"\n")
   cat("Estimation method: ", attr(x,"method"),"\n")
   res<-list(
     winners=df1,
@@ -36,6 +40,8 @@ summary.ubcBiasDetection<-function(x,...) {
     a.bias1.sd=sd(df1$bias1),
     a.bias2.sd=sd(df1$bias2),
     stages.r2=r2,
+    stages.a=a,
+    stages.b=b,
     method=attr(x,"method")
   )
   class(res)<-c("ubc.bd.summary",class(res))
